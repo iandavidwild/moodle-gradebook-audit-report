@@ -1467,7 +1467,7 @@ class grade_report_audit extends grade_report {
     	$object = $element['object'];
     
     	switch ($element['type']) {
-    		case 'item':
+    		//case 'item':
     		case 'grade':
     			if (empty($object->id)) { 
     				$url = new moodle_url('/grade/report/audit/audit.php',
