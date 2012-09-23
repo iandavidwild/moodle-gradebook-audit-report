@@ -228,9 +228,9 @@ class grade_report_audit extends grade_report {
                     }
                 }
                 if ($errorstr) {
-                    $user = $DB->get_record('user', array('id' => $userid), 'id, username');
+                    $user = $DB->get_record('user', array('id' => $userid), 'id, firstname, lastname');
                     $gradestr = new stdClass();
-                    $gradestr->username = $user->username;
+                    $gradestr->username = fullname($user);
                     $gradestr->itemname = $gradeitem->get_name();
                     $warnings[] = get_string($errorstr, 'grades', $gradestr);
                 }
@@ -270,7 +270,7 @@ class grade_report_audit extends grade_report {
     }
 
 
-    /**
+/**
      * Setting the sort order, this depends on last state
      * all this should be in the new table class that we might need to use
      * for displaying grades.
@@ -281,15 +281,15 @@ class grade_report_audit extends grade_report {
 
         if ($this->sortitemid) {
             if (!isset($SESSION->gradeuserreport->sort)) {
-                if ($this->sortitemid == 'username') {
+                if ($this->sortitemid == 'firstname' || $this->sortitemid == 'lastname') {
                     $this->sortorder = $SESSION->gradeuserreport->sort = 'ASC';
                 } else {
                     $this->sortorder = $SESSION->gradeuserreport->sort = 'DESC';
                 }
             } else {
-                // this is the first sort, i.e. by username
+                // this is the first sort, i.e. by last name
                 if (!isset($SESSION->gradeuserreport->sortitemid)) {
-                    if ($this->sortitemid == 'username') {
+                    if ($this->sortitemid == 'firstname' || $this->sortitemid == 'lastname') {
                         $this->sortorder = $SESSION->gradeuserreport->sort = 'ASC';
                     } else {
                         $this->sortorder = $SESSION->gradeuserreport->sort = 'DESC';
@@ -301,6 +301,12 @@ class grade_report_audit extends grade_report {
                     } else {
                         $this->sortorder = $SESSION->gradeuserreport->sort = 'ASC';
                     }
+                } else {
+                    if ($this->sortitemid == 'firstname' || $this->sortitemid == 'lastname') {
+                        $this->sortorder = $SESSION->gradeuserreport->sort = 'ASC';
+                    } else {
+                        $this->sortorder = $SESSION->gradeuserreport->sort = 'DESC';
+                    }
                 }
             }
             $SESSION->gradeuserreport->sortitemid = $this->sortitemid;
@@ -310,7 +316,7 @@ class grade_report_audit extends grade_report {
             if (isset($SESSION->gradeuserreport->sortitemid)) {
                 $this->sortitemid = $SESSION->gradeuserreport->sortitemid;
             }else{
-                $this->sortitemid = 'username';
+                $this->sortitemid = 'lastname';
             }
 
             if (isset($SESSION->gradeuserreport->sort)) {
@@ -321,7 +327,7 @@ class grade_report_audit extends grade_report {
         }
     }
 
-    /**
+     /**
      * pulls out the userids of the users to be display, and sorts them
      */
     public function load_users() {
@@ -334,9 +340,9 @@ class grade_report_audit extends grade_report {
         list($enrolledsql, $enrolledparams) = get_enrolled_sql($this->context);
 
         //fields we need from the user table
-        $userfields = user_picture::fields('u'); 
+        $userfields = user_picture::fields('u');
         $userfields .= get_extra_user_fields_sql($this->context);
-        
+
         $sortjoin = $sort = $params = null;
 
         //if the user has clicked one of the sort asc/desc arrows
@@ -349,8 +355,11 @@ class grade_report_audit extends grade_report {
         } else {
             $sortjoin = '';
             switch($this->sortitemid) {
-                case 'username':
-                    $sort = "u.username $this->sortorder";
+                case 'lastname':
+                    $sort = "u.lastname $this->sortorder, u.firstname $this->sortorder";
+                    break;
+                case 'firstname':
+                    $sort = "u.firstname $this->sortorder, u.lastname $this->sortorder";
                     break;
                 case 'idnumber':
                 default:
@@ -583,12 +592,10 @@ class grade_report_audit extends grade_report {
         $studentheader->scope = 'col';
         $studentheader->header = true;
         $studentheader->id = 'studentheader';
-    
         if (has_capability('gradereport/'.$CFG->grade_profilereport.':view', $this->context)) {
             $studentheader->colspan = 2;
         }
-
-        $studentheader->text = $arrows['username'];
+        $studentheader->text = $arrows['studentname'];
 
         $headerrow->cells[] = $studentheader;
 
@@ -1647,46 +1654,59 @@ class grade_report_audit extends grade_report {
 
     /**
      * Refactored function for generating HTML of sorting links with matching arrows.
-     * Returns an array with 'username' and 'idnumber' as keys, with HTML ready
+     * Returns an array with 'studentname' and 'idnumber' as keys, with HTML ready
      * to inject into a table header cell.
      * @param array $extrafields Array of extra fields being displayed, such as
      *   user idnumber
      * @return array An associative array of HTML sorting links+arrows
      */
-	public function get_sort_arrows(array $extrafields = array()) {
+public function get_sort_arrows(array $extrafields = array()) {
         global $OUTPUT;
         $arrows = array();
 
         $strsortasc   = $this->get_lang_string('sortasc', 'grades');
         $strsortdesc  = $this->get_lang_string('sortdesc', 'grades');
-        $strusername  = $this->get_lang_string('username');
+        $strfirstname = $this->get_lang_string('firstname');
+        $strlastname  = $this->get_lang_string('lastname');
 
-        $userlink = html_writer::link(new moodle_url($this->baseurl, array('sortitemid'=>'username')), $strusername);
+        $firstlink = html_writer::link(new moodle_url($this->baseurl, array('sortitemid'=>'firstname')), $strfirstname);
+        $lastlink = html_writer::link(new moodle_url($this->baseurl, array('sortitemid'=>'lastname')), $strlastname);
 
-        $arrows['username'] = $userlink;
+        $arrows['studentname'] = $lastlink;
 
-        if ($this->sortitemid === 'username') {
+        if ($this->sortitemid === 'lastname') {
             if ($this->sortorder == 'ASC') {
-                $arrows['username'] .= print_arrow('up', $strsortasc, true);
+                $arrows['studentname'] .= print_arrow('up', $strsortasc, true);
             } else {
-                $arrows['username'] .= print_arrow('down', $strsortdesc, true);
+                $arrows['studentname'] .= print_arrow('down', $strsortdesc, true);
+            }
+        }
+
+        $arrows['studentname'] .= ' ' . $firstlink;
+
+        if ($this->sortitemid === 'firstname') {
+            if ($this->sortorder == 'ASC') {
+                $arrows['studentname'] .= print_arrow('up', $strsortasc, true);
+            } else {
+                $arrows['studentname'] .= print_arrow('down', $strsortdesc, true);
             }
         }
 
         foreach ($extrafields as $field) {
-        	$fieldlink = html_writer::link(new moodle_url($this->baseurl,
-	                array('sortitemid'=>$field)), get_user_field_name($field));
-	        $arrows[$field] = $fieldlink;
+            $fieldlink = html_writer::link(new moodle_url($this->baseurl,
+                    array('sortitemid'=>$field)), get_user_field_name($field));
+            $arrows[$field] = $fieldlink;
+
             if ($field == $this->sortitemid) {
-            	if ($this->sortorder == 'ASC') {
-	                $arrows[$field] .= print_arrow('up', $strsortasc, true);
-	            } else {
-	                $arrows[$field] .= print_arrow('down', $strsortdesc, true);
-	            }
-	        }
+                if ($this->sortorder == 'ASC') {
+                    $arrows[$field] .= print_arrow('up', $strsortasc, true);
+                } else {
+                    $arrows[$field] .= print_arrow('down', $strsortdesc, true);
+                }
+            }
         }
 
         return $arrows;
     }
 }
-
+    
